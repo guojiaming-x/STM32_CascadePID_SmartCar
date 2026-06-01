@@ -1,86 +1,41 @@
-# STM32 Cascade PID Smart Car
+# STM32 Smart Car — 蓝牙遥控 + 循迹 + 避障
 
-串级PID 直流电机位置-速度控制系统，基于 STM32F103 (HAL库)。
+基于 STM32F103C8T6 (HAL库) 的智能小车，完整工程，Keil MDK 直接打开编译。
 
 ## 快速开始
 
-### 1. 用 STM32CubeIDE 打开
+用 Keil MDK5 打开 `MDK-ARM/SmartCar.uvprojx` → 编译 → 烧录。
 
-```
-File → Import → Existing Projects into Workspace
-→ 选择本目录 → Finish
-```
+## 功能
 
-或双击 `CAR.ioc` → 用 CubeMX 打开 → **GENERATE CODE** → 用 CubeIDE 打开。
-
-### 2. 硬件连接
-
-| 外设 | STM32引脚 | 说明 |
-|------|----------|------|
-| 编码器 | TIM2 CH1/CH2 | 电机编码器A/B相 |
-| 电机PWM | TIM1 CH1 | 左电机PWM |
-| 电机方向 | AIN1/AIN2 | GPIO控制正反转 |
-| 调试串口 | USART1 | printf输出 |
-
-### 3. 编译烧录
-
-```bash
-# CubeIDE内直接点 🔨 Build → ▶ Run
-```
-
-## 系统架构
-
-```
-目标角度(720°) ──→ [位置环 P] ──→ [速度环 PI] ──→ 电机 PWM
-                      ↑                   ↑
-                 编码器角度反馈        编码器速度反馈
-```
-
-**TIM3 10ms中断中执行的串级控制：**
-```
-updateEncoder() → 位置环PID → 速度环PID → runMotorPWM()
-```
+- **蓝牙遥控**：E前进/H后退/L左转/R右转/S停止/X旋转
+- **5路循迹**：红外传感器阵列，黑线识别
+- **超声波避障**：HC-SR04 实时测距
+- **双轮差速**：PWM 调速 + GPIO 方向控制
 
 ## 文件结构
 
 ```
-├── CAR.ioc                    CubeMX工程（引脚/时钟/外设配置）
-├── Core/
-│   ├── Inc/
-│   │   ├── main.h
-│   │   ├── encoder.h          编码器数据结构
-│   │   ├── pid.h              PID控制器结构体
-│   │   ├── motor.h            电机接口
-│   │   └── interrupt_main.h   控制初始化声明
-│   └── Src/
-│       ├── main.c             主入口
-│       ├── encoder.c          编码器驱动（16/32位自适应溢出补偿）
-│       ├── pid.c              标准位置式PID
-│       ├── motor.c            直流有刷电机PWM驱动
-│       └── interrupt_main.c   串级PID控制循环
-└── Drivers/                   （CubeMX生成，首次打开.ioc自动创建）
+├── SmartCar.ioc              CubeMX工程
+├── Core/                     HAL用户代码（gpio/tim/usart初始化）
+├── Drivers/                  CMSIS + STM32F1xx HAL库
+├── MDK-ARM/                  Keil工程（可直接打开编译）
+├── EWARM/                    IAR工程
+├── USER/
+│   ├── moter.c/h             电机驱动（前进/后退/左转/右转/刹车/旋转）
+│   └── interputer_main.c/h   中断服务
+├── USER_Moter/
+│   └── moter.c/h             电机驱动（另一版本）
+└── NUEDC_串级PID参考/         串级PID代码（参考学习）
+    ├── User/src/             encoder + pid + motor + interrupt_main
+    └── UASER_舵机云台/        X/Y编码器舵机云台模块
 ```
 
-## 核心实现
+## 硬件
 
-### 编码器 (`encoder.c`)
-
-自动适配16/32位定时器，跳变阈值检测溢出方向并补偿，物理量解算：
-```
-原始脉冲 → 转数 → 角度 → 距离 → 线速度
-```
-
-参数：4倍频 × 减速比30:1 × 500线编码器 × 轮半径0.065m
-
-### 串级PID参数
-
-| 环 | 类型 | Kp | Ki | Kd | 输出限幅 |
-|----|------|-----|-----|-----|----------|
-| 位置环(外环) | P | 0.9 | 0 | 0 | ±300 RPM |
-| 速度环(内环) | PI | 10 | 0.5 | 0 | ±2100 PWM |
-
-### 电机驱动 (`motor.c`)
-
-- 正转：AIN1=LOW, AIN2=HIGH
-- 反转：AIN1=HIGH, AIN2=LOW
-- 刹车：AIN1=AIN2=HIGH（电机制动）
+| 模块 | 引脚 |
+|------|------|
+| 蓝牙 HC-05 | USART1 |
+| 超声波 HC-SR04 | Trig=PB5, Echo=PB4 |
+| 5路循迹 | PA3~PA7 |
+| 电机 L298N | AIN1/AIN2/BIN1/BIN2 + TIM2 PWM |
